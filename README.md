@@ -81,7 +81,7 @@ roman
 
 ## 截圖
 
-![Screenshot](assets/screenshot.png)  
+![Screenshot](assets/UI.png)  
 *圖形化界面示例*
 
 ---
