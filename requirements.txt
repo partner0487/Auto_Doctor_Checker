@@ -1,0 +1,6 @@
+tkinter
+Pillow
+selenium
+pygame
+word2number
+roman
