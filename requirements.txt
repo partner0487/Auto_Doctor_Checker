@@ -2,3 +2,4 @@ selenium>=4.6
 pygame
 word2number
 roman
+plyer  # 選用：系統通知

@@ -1,3 +1,4 @@
+import sys
 import time
 import tkinter as tk
 from concurrent.futures import ThreadPoolExecutor
@@ -20,6 +21,11 @@ try:
     SOUND_AVAILABLE = ALARM_SOUND.exists()
 except Exception:  # 沒有音訊裝置等情況：改用系統提示音
     SOUND_AVAILABLE = False
+
+try:
+    from plyer import notification  # 選用：系統通知
+except ImportError:
+    notification = None
 
 # 所有 Selenium 操作都在這一個背景執行緒進行，GUI 只在主執行緒更新
 executor = ThreadPoolExecutor(max_workers=1)
@@ -167,8 +173,9 @@ def on_data(data):
         set_status(f"[{now}] 第 {clinic} 診尚未開診，持續等待中")
         schedule_next()
     elif status.kind == "alarm":
-        stop_monitoring(f"[{now}] 目前 {status.row.sequence} 號，快輪到您（{sequence} 號）了！")
-        trigger_alarm()
+        message = f"第 {clinic} 診目前 {status.row.sequence} 號，快輪到您（{sequence} 號）了！"
+        stop_monitoring(f"[{now}] {message}")
+        trigger_alarm(message)
     else:  # wait
         source = "依叫號速度估算" if state.pace.estimate() is not None else "預設值"
         set_status(f"[{now}] 目前 {status.row.sequence} 號，您是 {sequence} 號，前面還有 {status.ahead} 號\n"
@@ -188,7 +195,44 @@ def update_table(rows):
 
 # ---------- 鬧鐘 ----------
 
-def trigger_alarm():
+def notify_system(message):
+    """發送系統通知；未安裝 plyer 或失敗時略過。"""
+    if notification is None:
+        return
+    try:
+        notification.notify(title="自動雲端候診提醒", message=message,
+                            app_name="自動雲端候診提醒", timeout=30)
+    except Exception:
+        pass
+
+
+def bring_to_front():
+    """還原最小化的主視窗、拉到最上層，並讓工作列圖示閃爍（Windows）。"""
+    root.deiconify()
+    root.lift()
+    root.attributes("-topmost", True)
+    root.after(1000, lambda: root.attributes("-topmost", False))
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            class FLASHWINFO(ctypes.Structure):
+                _fields_ = [("cbSize", wintypes.UINT), ("hwnd", wintypes.HWND),
+                            ("dwFlags", wintypes.DWORD), ("uCount", wintypes.UINT),
+                            ("dwTimeout", wintypes.DWORD)]
+
+            hwnd = ctypes.windll.user32.GetParent(root.winfo_id())
+            FLASHW_ALL, FLASHW_TIMERNOFG = 0x3, 0xC  # 閃爍直到視窗取得焦點
+            info = FLASHWINFO(ctypes.sizeof(FLASHWINFO), hwnd, FLASHW_ALL | FLASHW_TIMERNOFG, 0, 0)
+            ctypes.windll.user32.FlashWindowEx(ctypes.byref(info))
+        except Exception:
+            pass
+
+
+def trigger_alarm(message="快到您看病了喔"):
+    bring_to_front()
+    notify_system(message)
     if SOUND_AVAILABLE:
         pygame.mixer.music.load(str(ALARM_SOUND))
         pygame.mixer.music.play(loops=-1)  # 無限循環播放，直到按下關閉
@@ -203,6 +247,7 @@ def trigger_alarm():
     alarm_window.geometry(f"{window_width}x{window_height}+{x}+{y}")
     alarm_window.attributes("-topmost", True)
     tk.Label(alarm_window, text="快到您看病了喔").pack(pady=10)
+    alarm_window.focus_force()
     tk.Button(alarm_window, text="關閉鬧鐘", command=lambda: close_alarm(alarm_window)).pack(pady=10)
     alarm_window.protocol("WM_DELETE_WINDOW", lambda: close_alarm(alarm_window))
 
