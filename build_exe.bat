@@ -11,6 +11,9 @@ if exist "%PY_PREFIX%\Library\bin" set "PATH=%PY_PREFIX%\Library\bin;%PATH%"
 
 python -m PyInstaller --noconfirm --clean --onefile --windowed ^
     --name AutoDoctorChecker ^
+    --icon assets\icon.ico ^
     --add-data "alarm.mp3;." ^
+    --add-data "assets\icon.ico;assets" ^
+    --add-data "assets\icon.png;assets" ^
     --hidden-import plyer.platforms.win.notification ^
     DoctorChecker.py

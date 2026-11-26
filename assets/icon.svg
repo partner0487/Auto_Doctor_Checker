@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1FB5AC"/><stop offset="1" stop-color="#0B7A85"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="url(#bg)"/>
+  <!-- 鈴鐺 -->
+  <g fill="#FFFFFF">
+    <path d="M44 92 A40 40 0 0 1 100 36 Z"/>
+    <path d="M212 92 A40 40 0 0 0 156 36 Z"/>
+    <rect x="120" y="40" width="16" height="24" rx="4"/>
+  </g>
+  <!-- 腳 -->
+  <g stroke="#FFFFFF" stroke-width="14" stroke-linecap="round">
+    <line x1="80" y1="196" x2="62" y2="222"/>
+    <line x1="176" y1="196" x2="194" y2="222"/>
+  </g>
+  <!-- 鐘身 -->
+  <circle cx="128" cy="138" r="78" fill="#FFFFFF"/>
+  <circle cx="128" cy="138" r="62" fill="#EAF7F6"/>
+  <!-- 刻度 -->
+  <g fill="#0B7A85">
+    <rect x="125" y="80" width="6" height="12" rx="3"/>
+    <rect x="125" y="184" width="6" height="12" rx="3"/>
+    <rect x="70" y="135" width="12" height="6" rx="3"/>
+    <rect x="174" y="135" width="12" height="6" rx="3"/>
+  </g>
+  <!-- 紅十字 -->
+  <g fill="#E5484D">
+    <rect x="114" y="102" width="28" height="72" rx="6"/>
+    <rect x="92" y="124" width="72" height="28" rx="6"/>
+  </g>
+</svg>

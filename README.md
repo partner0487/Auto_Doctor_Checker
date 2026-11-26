@@ -71,7 +71,9 @@ pip install -r requirements.txt pyinstaller
 build_exe.bat
 ```
 
-產生的檔案為 `dist\AutoDoctorChecker.exe`。上次輸入的設定存於 `%APPDATA%\AutoDoctorChecker\settings.json`。
+產生的檔案為 `dist\AutoDoctorChecker.exe`。
+
+程式圖示的原始檔為 `assets/icon.svg`，修改後執行 `python tools/make_icon.py`（需要 Pillow）重新產生 `icon.png` 與 `icon.ico`。上次輸入的設定存於 `%APPDATA%\AutoDoctorChecker\settings.json`。
 
 ---
 

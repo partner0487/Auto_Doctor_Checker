@@ -13,7 +13,10 @@ from waitlist import PaceEstimator, convert_to_int, evaluate, find_clinic, parse
 POLL_INTERVAL_MS = 30_000      # 每 30 秒更新一次
 RESULT_CHECK_MS = 200          # 檢查背景抓取是否完成的間隔
 MAX_SILENT_FAILURES = 3        # 連續失敗幾次才跳出警告（之後仍持續重試）
-ALARM_SOUND = Path(__file__).resolve().parent / "alarm.mp3"
+BASE_DIR = Path(__file__).resolve().parent
+ALARM_SOUND = BASE_DIR / "alarm.mp3"
+ICON_ICO = BASE_DIR / "assets" / "icon.ico"
+ICON_PNG = BASE_DIR / "assets" / "icon.png"
 
 try:
     import pygame
@@ -267,8 +270,31 @@ def on_close():
 
 # ---------- 介面 ----------
 
+def set_app_icon(window):
+    """設定視窗與工作列圖示；找不到圖示檔時沿用預設。"""
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            # 讓工作列顯示本程式的圖示，而不是 python.exe 的
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("AutoDoctorChecker")
+        except Exception:
+            pass
+        if ICON_ICO.exists():
+            try:
+                window.iconbitmap(default=str(ICON_ICO))  # default=：之後的 Toplevel 也套用
+                return
+            except tk.TclError:
+                pass
+    if ICON_PNG.exists():
+        try:
+            window.iconphoto(True, tk.PhotoImage(file=str(ICON_PNG)))
+        except tk.TclError:
+            pass
+
+
 root = tk.Tk()
 root.title("自動雲端候診提醒")
+set_app_icon(root)
 
 tk.Label(root, text="網址：").grid(row=0, column=0, padx=10, pady=10)
 url_entry = tk.Entry(root, width=50)
