@@ -63,15 +63,20 @@
 
 ## 依賴列表
 
-以下是專案所需的 Python 庫：
+以下是專案所需的 Python 庫（`tkinter` 為 Python 內建，不需另外安裝）：
 
 ```plaintext
-tkinter
-Pillow
-selenium
+selenium>=4.6
 pygame
 word2number
 roman
+```
+
+### 執行測試
+
+```bash
+pip install pytest
+pytest
 ```
 
 ---

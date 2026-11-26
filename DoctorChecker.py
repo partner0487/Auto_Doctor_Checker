@@ -1,85 +1,33 @@
 import tkinter as tk
 import threading
-from tkinter import Tk, Label, Entry, Button, messagebox, ttk
-from PIL import Image, ImageTk
-from tkinter import messagebox
+from tkinter import messagebox, ttk
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 import time
 import pygame
-import re
-from word2number import w2n
-import roman
-import math
-import unicodedata
+
+from waitlist import convert_to_int, find_clinic, parse_row, should_alarm
 
 pygame.mixer.init()
 
-# 中文數字轉換字典
-chinese_num_map = {
-    "零": 0, "一": 1, "二": 2, "三": 3, "四": 4,
-    "五": 5, "六": 6, "七": 7, "八": 8, "九": 9,
-    "十": 10, "百": 100, "千": 1000, "萬": 10000
-}
+global_data = []  # list[ClinicRow]
 
-global_data = []
 
-def is_roman(s):
-    try:
-        roman.fromRoman(s.upper())  # 嘗試轉換
-        return True
-    except roman.InvalidRomanNumeralError:
-        return False
-    
-def chinese_to_int(text):
-    if not text:
-        return 0
-
-    # 處理「零」
-    if text == "零":
-        return 0
-
-    # 處理「十」開頭的數字（如「十一」）
-    if text.startswith("十"):
-        text = "一" + text  # 將「十一」轉為「一十一」
-
-    # 拆分數字（如「二十一」 -> ["二", "十", "一"]）
-    parts = re.findall(r"[零一二三四五六七八九十百千萬]", text)
-    if not parts:
-        return 0
-
-    # 計算數值
-    result = 0
-    temp = 0
-    for part in parts:
-        if part in ["十", "百", "千", "萬"]:
-            if temp == 0:
-                temp = 1  # 處理「十」單獨出現的情況
-            result += temp * chinese_num_map[part]
-            temp = 0
-        else:
-            temp += chinese_num_map[part]
-    result += temp  # 加上最後的個位數
-
-    return result
-
-# 將各種形式的數字轉換為整數
-def convert_to_int(text):
-    # 嘗試提取純數字（如 "01" -> 1）
-    num_match = re.search(r"\d+", text)
-    if num_match:
-        return int(num_match.group())
-
-    text = text.strip().upper()  # 確保大小寫一致
-    if is_roman(text):  
-        return roman.fromRoman(text)  # 轉換羅馬數字
-    try:
-        return w2n.word_to_num(text)  # 轉換英文數字
-    except ValueError:
-        chinese_num_match = re.search(r"[零一二三四五六七八九十百千萬]+", text)
-        if chinese_num_match:
-            chinese_num = chinese_num_match.group()
-            return chinese_to_int(chinese_num)
+def read_inputs():
+    """讀取並驗證使用者輸入，回傳 (clinic, sequence, minutes)；不合法時跳警告並回傳 None。"""
+    clinic = convert_to_int(clinic_entry.get())
+    sequence = convert_to_int(sequence_entry.get())
+    minutes = convert_to_int(alarm_time.get())
+    if clinic is None or clinic <= 0:
+        messagebox.showwarning("輸入錯誤", "請輸入正確的診間（例如 1、01、第一）")
+        return None
+    if sequence is None or sequence <= 0:
+        messagebox.showwarning("輸入錯誤", "請輸入正確的門診序號（例如 15）")
+        return None
+    if minutes is None or minutes < 0:
+        messagebox.showwarning("輸入錯誤", "請輸入提前幾分鐘提醒（例如 30）")
+        return None
+    return clinic, sequence, minutes
 
 
 # 爬蟲函數：從網頁中提取表格數據
@@ -114,12 +62,6 @@ def fetch_table_data(url):
         messagebox.showerror("錯誤", f"爬取數據時發生錯誤: {e}")
         return []
 
-def to_halfwidth(data):
-    return ''.join(
-        chr(ord(c) - 0xFEE0) if unicodedata.category(c) == 'Nd' and '０' <= c <= '９' else c
-        for c in data
-    )
-
 # 顯示表格數據的函數
 def show_table_data():
     url = url_entry.get()
@@ -127,45 +69,42 @@ def show_table_data():
         messagebox.showwarning("輸入錯誤", "請輸入網址")
         return
 
+    inputs = read_inputs()
+    if inputs is None:
+        return
+    clinic, sequence, _ = inputs
+
     # 獲取表格數據
     data = fetch_table_data(url)
     if not data:
         messagebox.showwarning("警告", "無法獲取有效數據，請稍後重試")
         return
-    
+
     global global_data
-    tmp = [
-        (
-            convert_to_int(to_halfwidth(record[0])),  # 將第 0 個元素進行轉換
-            record[1],  # 保留第 1 個元素不變
-            record[2],  # 保留第 2 個元素不變
-            convert_to_int(to_halfwidth(record[3])),  # 將第 3 個元素進行轉換
-            convert_to_int(to_halfwidth(record[4]))   # 將第 4 個元素進行轉換
-        )
-        for record in data
-    ]
-    if global_data != tmp:
+    rows = [parse_row(record) for record in data]
+    if global_data != rows:
         # 清空之前的顯示
-        for row in result_table.get_children():
-            result_table.delete(row)
+        for item in result_table.get_children():
+            result_table.delete(item)
 
         # 將數據插入到表格中
-        for row in data:
-            result_table.insert('', 'end', values=row)
+        for row in rows:
+            result_table.insert('', 'end', values=row.raw)
 
-        global_data = tmp
+        global_data = rows
 
-    clinic = convert_to_int(clinic_entry.get())
-    if clinic > len(global_data):
-        messagebox.showwarning("錯誤", "您的診間超出該院診間數")
+    row = find_clinic(global_data, clinic)
+    if row is None:
+        available = "、".join(str(r.clinic) for r in global_data if r.clinic is not None)
+        messagebox.showwarning("錯誤", f"找不到第 {clinic} 診（此院診間：{available or '無'}）")
         return
-    
-    sequence = convert_to_int(sequence_entry.get())
-    if sequence < global_data[clinic-1][3]:
+
+    # row.sequence 為 None 代表尚未開診，繼續等待
+    if row.sequence is not None and sequence < row.sequence:
         messagebox.showwarning("錯誤", "您的門診序已過號")
         return
-    
-    root.after(30000 , show_table_data)  # 每 30 秒後再次執行
+
+    root.after(30000, show_table_data)  # 每 30 秒後再次執行
 
 def play_alarm_sound():
     pygame.mixer.music.load("alarm.mp3")  # 換成你的音效檔案
@@ -203,13 +142,10 @@ def stop_check_alarm():
     stop_event.set()  # 設置 stop_event，終止執行緒
     root.destroy()  # 假设 root 是你的主窗口
 
-def check_alarm():
-    alarm = math.ceil(convert_to_int(alarm_time.get()) / 5)
-    clinic = convert_to_int(clinic_entry.get()) - 1 
-    sequence = convert_to_int(sequence_entry.get())
+def check_alarm(clinic, sequence, minutes):
     while not stop_event.is_set():  # 當 stop_event 被設置為 True 時，退出執行緒
-        global global_data
-        if sequence - global_data[clinic][3] <= alarm:
+        row = find_clinic(global_data, clinic)
+        if row is not None and should_alarm(sequence, row.sequence, minutes):
             on_alarm_triggered()  # 彈出自定義視窗
             threading.Thread(target=play_alarm_sound).start()  # 用執行緒播放音樂
             break
@@ -223,8 +159,11 @@ def on_alarm_enter(event, fetch_button):
     fetch_button.invoke()
 
 def start_periodic_fetch():
+    inputs = read_inputs()
+    if inputs is None:
+        return
     show_table_data()  # 立即執行一次
-    threading.Thread(target=check_alarm).start()  # 用執行緒執行，避免卡住 GUI
+    threading.Thread(target=check_alarm, args=inputs).start()  # 用執行緒執行，避免卡住 GUI
 
 # 創建主窗口
 root = tk.Tk()
@@ -258,7 +197,7 @@ fetch_button.grid(row=4, column=1, pady=10)
 
 # 創建顯示結果的表格
 columns = ("診間名稱", "看診醫師", "時段", "門診序", "等待")
-result_table = tk.ttk.Treeview(root, columns=columns, show='headings')
+result_table = ttk.Treeview(root, columns=columns, show='headings')
 for col in columns:
     result_table.heading(col, text=col)
     result_table.column(col, width=100)

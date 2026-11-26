@@ -1,6 +1,4 @@
-tkinter
-Pillow
-selenium
+selenium>=4.6
 pygame
 word2number
 roman
