@@ -1,4 +1,10 @@
-# 全國雲端候診中心 自動提醒
+<p align="center">
+  <img src="assets/icon.svg" alt="自動雲端候診提醒 icon" width="128" height="128">
+</p>
+
+<h1 align="center">全國雲端候診中心 自動提醒</h1>
+
+<p align="center">快輪到您時響鈴通知，不必一直盯著候診頁面</p>
 
 這是一個基於 Python 的自動化工具，用於監控「全國雲端候診中心」的診間狀態，並在指定時間前提醒用戶。用戶只需輸入網址、診間、門診序號以及希望提前幾分鐘提醒，工具會自動監控診間狀態並在時間到時發出提醒。<br>
 全國雲端候診中心：https://wroom.vision.com.tw/MainPage.aspx
