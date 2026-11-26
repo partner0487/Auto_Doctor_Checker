@@ -106,7 +106,7 @@ def test_pace_no_data_uses_default():
 
 
 def test_pace_fast_clinic_estimated():
-    p = PaceEstimator()
+    p = PaceEstimator(min_span_minutes=0)
     p.add(0, 10)
     p.add(5 * MIN, 12)
     p.add(9 * MIN, 13)           # 9 分鐘 3 號 → 每號 3 分鐘
@@ -123,14 +123,14 @@ def test_pace_slow_clinic_capped_at_default():
 
 
 def test_pace_floor():
-    p = PaceEstimator()
+    p = PaceEstimator(min_span_minutes=0)
     p.add(0, 10)
     p.add(1 * MIN, 20)           # 每號 0.1 分鐘 → 下限 1
     assert p.minutes_per_patient() == 1
 
 
 def test_pace_unchanged_number_keeps_first_seen_time():
-    p = PaceEstimator()
+    p = PaceEstimator(min_span_minutes=0)
     p.add(0, 10)
     p.add(4 * MIN, 10)
     p.add(8 * MIN, 10)
@@ -139,7 +139,7 @@ def test_pace_unchanged_number_keeps_first_seen_time():
 
 
 def test_pace_resets_when_number_goes_back():
-    p = PaceEstimator()
+    p = PaceEstimator(min_span_minutes=0)
     p.add(0, 30)
     p.add(10 * MIN, 35)
     p.add(20 * MIN, 1)           # 換時段
@@ -164,3 +164,35 @@ def test_evaluate_with_faster_pace_alarms_earlier():
     # 前面 8 號、提前 30 分鐘：每號 5 分 → 門檻 6 號，不提醒；每號 3 分 → 門檻 10 號，提醒
     assert evaluate(rows, 1, 18, 30, minutes_per_patient=5).kind == "wait"
     assert evaluate(rows, 1, 18, 30, minutes_per_patient=3).kind == "alarm"
+
+
+# ---------- 顯示 ----------
+from waitlist import display_values, progress_fraction
+
+
+def test_display_values():
+    assert display_values(parse_row(["０１ 診", "王棋祺 醫師", "下午", "0026", "3"])) == \
+        ("01 診", "王棋祺 醫師", "下午", "26", "3")
+    assert display_values(parse_row(["０２ 診", "----", "----", "----", "----"])) == \
+        ("02 診", "—", "—", "—", "—")
+    assert display_values(parse_row(["第三診", "", "  ", "0", "0"])) == ("第三診", "—", "—", "0", "0")
+
+
+@pytest.mark.parametrize("start, ahead, threshold, expected", [
+    (16, 16, 6, 0.0), (16, 10, 6, 0.6), (16, 6, 6, 1.0), (16, 2, 6, 1.0),
+    (16, 20, 6, 0.0),   # 號碼倒退 → 不會變負的
+    (5, 5, 6, 1.0),     # 一開始就在提醒範圍內
+])
+def test_progress_fraction(start, ahead, threshold, expected):
+    assert progress_fraction(start, ahead, threshold) == pytest.approx(expected)
+
+
+def test_pace_requires_min_observation_span():
+    # 30 秒內一次跳 6 號（例如跳過未到的號碼）不能當成每號 1 分鐘
+    p = PaceEstimator()
+    p.add(0, 20)
+    p.add(30, 26)
+    assert p.estimate() is None
+    assert p.minutes_per_patient() == 5
+    p.add(12 * MIN, 30)          # 觀察滿 10 分鐘：12 分鐘 10 號 → 1.2 分/號
+    assert p.estimate() == pytest.approx(1.2)

@@ -113,6 +113,33 @@ def find_clinic(rows, clinic_no: int) -> Optional[ClinicRow]:
     return matches[0]
 
 
+EMPTY = "—"
+
+
+def _clean_text(text: str) -> str:
+    text = " ".join(unicodedata.normalize("NFKC", text or "").split())
+    return EMPTY if not text or set(text) <= {"-"} else text
+
+
+def display_values(row: ClinicRow) -> tuple:
+    """表格顯示用：全形轉半形、去掉號碼前面的 0、「----」改為「—」。"""
+    clinic_name, doctor, time_slot, _, _ = row.raw
+    return (
+        _clean_text(clinic_name),
+        _clean_text(doctor),
+        _clean_text(time_slot),
+        EMPTY if row.sequence is None else str(row.sequence),
+        EMPTY if row.waiting is None else str(row.waiting),
+    )
+
+
+def progress_fraction(start_ahead: int, ahead: int, threshold: int) -> float:
+    """從開始監控（前面 start_ahead 號）到提醒（前面 threshold 號）的進度，0～1。"""
+    if start_ahead <= threshold:
+        return 1.0
+    return min(max((start_ahead - ahead) / (start_ahead - threshold), 0.0), 1.0)
+
+
 def patients_ahead_threshold(minutes: int, minutes_per_patient: int = 5) -> int:
     """提前 minutes 分鐘提醒，相當於前面剩幾號時提醒。"""
     return math.ceil(minutes / minutes_per_patient)
@@ -124,17 +151,19 @@ DEFAULT_MINUTES_PER_PATIENT = 5
 class PaceEstimator:
     """依觀察到的叫號速度估算「每號約幾分鐘」。
 
-    只用最近 window_minutes 內的紀錄，且號碼至少前進 min_advance 號才採用。
+    只用最近 window_minutes 內的紀錄，且號碼至少前進 min_advance 號、
+    觀察時間至少 min_span_minutes 分鐘才採用（避免一次跳過好幾個未到號時誤判為很快）。
     估計值會限制在 [min_pace, max_pace]：max_pace 預設等於原本的 5 分鐘，
     因此提醒只會比原本早、不會比原本晚（醫師休息時速度變慢也不會延後提醒）。
     """
 
     def __init__(self, max_pace: float = DEFAULT_MINUTES_PER_PATIENT, min_pace: float = 1.0,
-                 window_minutes: float = 60, min_advance: int = 2):
+                 window_minutes: float = 60, min_advance: int = 2, min_span_minutes: float = 10):
         self.max_pace = max_pace
         self.min_pace = min_pace
         self.window_seconds = window_minutes * 60
         self.min_advance = min_advance
+        self.min_span_seconds = min_span_minutes * 60
         self._history = []  # [(timestamp_seconds, sequence)]
 
     def add(self, timestamp: float, sequence: Optional[int]):
@@ -155,7 +184,7 @@ class PaceEstimator:
             return None
         (t0, s0), (t1, s1) = self._history[0], self._history[-1]
         advanced = s1 - s0
-        if advanced < self.min_advance or t1 <= t0:
+        if advanced < self.min_advance or t1 - t0 < self.min_span_seconds:
             return None
         return (t1 - t0) / 60 / advanced
 
