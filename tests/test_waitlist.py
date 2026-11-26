@@ -87,3 +87,80 @@ def test_evaluate():
     assert (s.kind, s.ahead) == ("alarm", 6)
     s = evaluate(rows, 1, 50, 30)
     assert (s.kind, s.ahead, s.row.sequence) == ("wait", 37, 13)
+
+
+# ---------- PaceEstimator ----------
+from waitlist import PaceEstimator
+
+MIN = 60
+
+
+def test_pace_no_data_uses_default():
+    p = PaceEstimator()
+    assert p.estimate() is None
+    assert p.minutes_per_patient() == 5
+    p.add(0, 10)
+    p.add(10 * MIN, 11)          # 只前進 1 號，不足以估計
+    assert p.estimate() is None
+    assert p.minutes_per_patient() == 5
+
+
+def test_pace_fast_clinic_estimated():
+    p = PaceEstimator()
+    p.add(0, 10)
+    p.add(5 * MIN, 12)
+    p.add(9 * MIN, 13)           # 9 分鐘 3 號 → 每號 3 分鐘
+    assert p.estimate() == pytest.approx(3)
+    assert p.minutes_per_patient() == pytest.approx(3)
+
+
+def test_pace_slow_clinic_capped_at_default():
+    p = PaceEstimator()
+    p.add(0, 10)
+    p.add(30 * MIN, 12)          # 每號 15 分鐘 → 上限 5，不延後提醒
+    assert p.estimate() == pytest.approx(15)
+    assert p.minutes_per_patient() == 5
+
+
+def test_pace_floor():
+    p = PaceEstimator()
+    p.add(0, 10)
+    p.add(1 * MIN, 20)           # 每號 0.1 分鐘 → 下限 1
+    assert p.minutes_per_patient() == 1
+
+
+def test_pace_unchanged_number_keeps_first_seen_time():
+    p = PaceEstimator()
+    p.add(0, 10)
+    p.add(4 * MIN, 10)
+    p.add(8 * MIN, 10)
+    p.add(8 * MIN + 1, 12)       # 10 號從 0 分開始 → 8 分鐘 2 號 = 4 分/號
+    assert p.estimate() == pytest.approx(4, abs=0.01)
+
+
+def test_pace_resets_when_number_goes_back():
+    p = PaceEstimator()
+    p.add(0, 30)
+    p.add(10 * MIN, 35)
+    p.add(20 * MIN, 1)           # 換時段
+    assert p.estimate() is None
+    p.add(26 * MIN, 3)
+    assert p.estimate() == pytest.approx(3)
+
+
+def test_pace_ignores_none_and_old_history():
+    p = PaceEstimator(window_minutes=60)
+    p.add(0, 1)
+    p.add(5 * MIN, None)
+    p.add(10 * MIN, 2)
+    p.add(100 * MIN, 30)
+    p.add(110 * MIN, 34)         # 舊紀錄被丟掉，只看 100~110 分：10 分鐘 4 號
+    assert p.estimate() == pytest.approx(2.5)
+
+
+def test_evaluate_with_faster_pace_alarms_earlier():
+    from waitlist import evaluate
+    rows = [_row(1, 10)]
+    # 前面 8 號、提前 30 分鐘：每號 5 分 → 門檻 6 號，不提醒；每號 3 分 → 門檻 10 號，提醒
+    assert evaluate(rows, 1, 18, 30, minutes_per_patient=5).kind == "wait"
+    assert evaluate(rows, 1, 18, 30, minutes_per_patient=3).kind == "alarm"

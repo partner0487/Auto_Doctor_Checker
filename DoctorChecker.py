@@ -6,7 +6,7 @@ from tkinter import messagebox, ttk
 from types import SimpleNamespace
 
 from fetcher import FetchError, WaitlistFetcher
-from waitlist import convert_to_int, evaluate, parse_row
+from waitlist import PaceEstimator, convert_to_int, evaluate, find_clinic, parse_row
 
 POLL_INTERVAL_MS = 30_000      # 每 30 秒更新一次
 RESULT_CHECK_MS = 200          # 檢查背景抓取是否完成的間隔
@@ -32,6 +32,7 @@ state = SimpleNamespace(
     failures=0,
     first_check=True,
     rows=[],
+    pace=PaceEstimator(),
 )
 
 
@@ -72,6 +73,7 @@ def start_monitoring():
     state.running = True
     state.failures = 0
     state.first_check = True
+    state.pace = PaceEstimator()
     for w in (url_entry, clinic_entry, sequence_entry, alarm_time):
         w.config(state="disabled")
     fetch_button.config(state="disabled")
@@ -142,7 +144,12 @@ def on_data(data):
     update_table(rows)
 
     _, clinic, sequence, minutes = state.params
-    status = evaluate(rows, clinic, sequence, minutes, first_check=state.first_check)
+    row = find_clinic(rows, clinic)
+    if row is not None:
+        state.pace.add(time.time(), row.sequence)
+    pace = state.pace.minutes_per_patient()
+    status = evaluate(rows, clinic, sequence, minutes, first_check=state.first_check,
+                      minutes_per_patient=pace)
     state.first_check = False
     now = time.strftime("%H:%M:%S")
 
@@ -160,7 +167,9 @@ def on_data(data):
         stop_monitoring(f"[{now}] 目前 {status.row.sequence} 號，快輪到您（{sequence} 號）了！")
         trigger_alarm()
     else:  # wait
-        set_status(f"[{now}] 目前 {status.row.sequence} 號，您是 {sequence} 號，前面還有 {status.ahead} 號")
+        source = "依叫號速度估算" if state.pace.estimate() is not None else "預設值"
+        set_status(f"[{now}] 目前 {status.row.sequence} 號，您是 {sequence} 號，前面還有 {status.ahead} 號\n"
+                   f"預估約 {status.ahead * pace:.0f} 分鐘後輪到您（每號約 {pace:.1f} 分鐘，{source}）")
         schedule_next()
 
 

@@ -118,6 +118,55 @@ def patients_ahead_threshold(minutes: int, minutes_per_patient: int = 5) -> int:
     return math.ceil(minutes / minutes_per_patient)
 
 
+DEFAULT_MINUTES_PER_PATIENT = 5
+
+
+class PaceEstimator:
+    """依觀察到的叫號速度估算「每號約幾分鐘」。
+
+    只用最近 window_minutes 內的紀錄，且號碼至少前進 min_advance 號才採用。
+    估計值會限制在 [min_pace, max_pace]：max_pace 預設等於原本的 5 分鐘，
+    因此提醒只會比原本早、不會比原本晚（醫師休息時速度變慢也不會延後提醒）。
+    """
+
+    def __init__(self, max_pace: float = DEFAULT_MINUTES_PER_PATIENT, min_pace: float = 1.0,
+                 window_minutes: float = 60, min_advance: int = 2):
+        self.max_pace = max_pace
+        self.min_pace = min_pace
+        self.window_seconds = window_minutes * 60
+        self.min_advance = min_advance
+        self._history = []  # [(timestamp_seconds, sequence)]
+
+    def add(self, timestamp: float, sequence: Optional[int]):
+        if sequence is None:
+            return
+        if self._history and sequence < self._history[-1][1]:
+            self._history.clear()  # 號碼倒退：換時段或重新開始
+        if self._history and sequence == self._history[-1][1]:
+            return  # 號碼沒變，保留第一次看到該號的時間
+        self._history.append((timestamp, sequence))
+        cutoff = timestamp - self.window_seconds
+        while len(self._history) > 2 and self._history[0][0] < cutoff:
+            self._history.pop(0)
+
+    def estimate(self) -> Optional[float]:
+        """回傳估計的每號分鐘數；資料不足時回傳 None。"""
+        if len(self._history) < 2:
+            return None
+        (t0, s0), (t1, s1) = self._history[0], self._history[-1]
+        advanced = s1 - s0
+        if advanced < self.min_advance or t1 <= t0:
+            return None
+        return (t1 - t0) / 60 / advanced
+
+    def minutes_per_patient(self) -> float:
+        """提醒判斷用的每號分鐘數：有估計值就用（限制在範圍內），否則用預設值。"""
+        est = self.estimate()
+        if est is None:
+            return self.max_pace
+        return min(max(est, self.min_pace), self.max_pace)
+
+
 class Status(NamedTuple):
     kind: str                      # "not_found" | "not_open" | "passed" | "alarm" | "wait"
     row: Optional[ClinicRow] = None
