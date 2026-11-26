@@ -10,7 +10,9 @@
 - **自動監控診間狀態**：從「全國雲端候診中心」網站獲取診間資訊。
 - **自定義提醒時間**：根據用戶輸入的門診序號和提前提醒時間，計算提醒時間。
 - **依叫號速度估算**：觀察最近 60 分鐘的叫號速度估算每號所需時間；診間叫號較快時會提早提醒。
-- **鬧鈴提醒**：在指定時間觸發鬧鈴提醒用戶。
+- **鬧鈴提醒**：在指定時間觸發鬧鈴，並發送系統通知、還原最小化的視窗、工作列圖示閃爍。
+- **斷線自動重試**：網路不穩時持續重試，連續失敗 3 次才提示。
+- **記住上次輸入**：自動帶入上次的網址、診間與提前分鐘數。
 - **圖形化界面**：使用 `tkinter` 提供簡單易用的圖形化界面。
 
 ---
@@ -60,6 +62,17 @@
    python DoctorChecker.py
    ```
 
+### 打包成 exe（Windows）
+
+不想安裝 Python 的使用者可以用打包好的 exe（電腦仍需安裝 Chrome）：
+
+```bash
+pip install -r requirements.txt pyinstaller
+build_exe.bat
+```
+
+產生的檔案為 `dist\AutoDoctorChecker.exe`。上次輸入的設定存於 `%APPDATA%\AutoDoctorChecker\settings.json`。
+
 ---
 
 ## 依賴列表
@@ -71,6 +84,7 @@ selenium>=4.6
 pygame
 word2number
 roman
+plyer      # 選用：系統通知
 ```
 
 ### 執行測試

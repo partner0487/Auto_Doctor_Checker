@@ -3,8 +3,10 @@
 同一個 Chrome 會重複使用（第一次之後只重新載入頁面），
 所有方法都應在同一個背景執行緒呼叫（見 DoctorChecker.py 的 ThreadPoolExecutor）。
 """
-from selenium import webdriver
 from selenium.common.exceptions import TimeoutException, WebDriverException
+# 直接 import Chrome 模組（不用 webdriver.Chrome 的延遲載入），PyInstaller 才分析得到
+from selenium.webdriver.chrome.options import Options as ChromeOptions
+from selenium.webdriver.chrome.webdriver import WebDriver as Chrome
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 
@@ -24,10 +26,10 @@ class WaitlistFetcher:
 
     def _ensure_driver(self):
         if self._driver is None:
-            options = webdriver.ChromeOptions()
+            options = ChromeOptions()
             options.add_argument("--headless=new")
             options.page_load_strategy = "eager"  # 不等圖片／外部資源，HTML 就緒即可
-            self._driver = webdriver.Chrome(options=options)  # Selenium 4.6+ 會自動下載 ChromeDriver
+            self._driver = Chrome(options=options)  # Selenium 4.6+ 會自動下載 ChromeDriver
             self._driver.set_page_load_timeout(self.timeout)
         return self._driver
 
