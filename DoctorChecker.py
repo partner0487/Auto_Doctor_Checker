@@ -5,6 +5,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 from types import SimpleNamespace
 
+import settings
 from fetcher import FetchError, WaitlistFetcher
 from waitlist import PaceEstimator, convert_to_int, evaluate, find_clinic, parse_row
 
@@ -70,6 +71,8 @@ def start_monitoring():
     if params is None:
         return
     state.params = params
+    settings.save({"url": url_entry.get().strip(), "clinic": clinic_entry.get().strip(),
+                   "minutes": alarm_time.get().strip()})
     state.running = True
     state.failures = 0
     state.first_check = True
@@ -263,6 +266,12 @@ for col in columns:
 result_table.grid(row=6, column=0, columnspan=2, padx=10, pady=10)
 
 root.protocol("WM_DELETE_WINDOW", on_close)
+
+# 帶入上次輸入的網址、診間、提前分鐘數；游標停在門診序號
+_saved = settings.load()
+for _entry, _key in ((url_entry, "url"), (clinic_entry, "clinic"), (alarm_time, "minutes")):
+    _entry.insert(0, _saved.get(_key, ""))
+(sequence_entry if _saved else url_entry).focus_set()
 
 if __name__ == "__main__":
     root.mainloop()
