@@ -74,3 +74,16 @@ def test_should_alarm():
     assert should_alarm(20, 13, 30) is False
     assert should_alarm(20, 25, 30) is True    # 已過號也提醒
     assert should_alarm(20, None, 30) is False  # 未開診不提醒
+
+
+def test_evaluate():
+    from waitlist import evaluate
+    rows = [_row(1, 13), _row(2, None)]
+    assert evaluate(rows, 9, 20, 30).kind == "not_found"
+    assert evaluate(rows, 2, 20, 30).kind == "not_open"
+    assert evaluate(rows, 1, 10, 30, first_check=True).kind == "passed"
+    assert evaluate(rows, 1, 10, 30).kind == "alarm"     # 監控途中過號 → 提醒
+    s = evaluate(rows, 1, 19, 30)                          # 前面 6 號、30 分鐘 → 提醒
+    assert (s.kind, s.ahead) == ("alarm", 6)
+    s = evaluate(rows, 1, 50, 30)
+    assert (s.kind, s.ahead, s.row.sequence) == ("wait", 37, 13)

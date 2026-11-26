@@ -118,6 +118,35 @@ def patients_ahead_threshold(minutes: int, minutes_per_patient: int = 5) -> int:
     return math.ceil(minutes / minutes_per_patient)
 
 
+class Status(NamedTuple):
+    kind: str                      # "not_found" | "not_open" | "passed" | "alarm" | "wait"
+    row: Optional[ClinicRow] = None
+    ahead: Optional[int] = None    # 前面還有幾號
+
+
+def evaluate(rows, clinic: int, my_sequence: int, minutes: int,
+             first_check: bool = False, minutes_per_patient: int = 5) -> Status:
+    """每次抓到資料後決定下一步。
+
+    - not_found：此院沒有該診間 → 停止監控
+    - not_open ：診間尚未開診 → 繼續等
+    - passed   ：開始監控時就已過號 → 停止監控
+    - alarm    ：進入提醒範圍（監控途中過號也算）→ 提醒並停止
+    - wait     ：繼續等
+    """
+    row = find_clinic(rows, clinic)
+    if row is None:
+        return Status("not_found")
+    if row.sequence is None:
+        return Status("not_open", row)
+    ahead = my_sequence - row.sequence
+    if first_check and ahead < 0:
+        return Status("passed", row, ahead)
+    if should_alarm(my_sequence, row.sequence, minutes, minutes_per_patient):
+        return Status("alarm", row, ahead)
+    return Status("wait", row, ahead)
+
+
 def should_alarm(my_sequence: int, current: Optional[int], minutes: int,
                  minutes_per_patient: int = 5) -> bool:
     """目前叫號 current 與自己的號碼相差在提醒範圍內時回傳 True。未開診（None）不提醒。"""
